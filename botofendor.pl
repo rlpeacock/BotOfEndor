@@ -97,7 +97,7 @@ my %HIST;
 
 # load defintions from data file and put it in global TERMS map
 sub load_definitions {
-    open my $termfile, "<", "data/orthoterms" or die "Unable to load term file";
+    open my $termfile, "<", "data/terms" or die "Unable to load term file";
     for my $line (<$termfile>) {
         my ($term, $def) = split /\|/, $line;
         chomp($def);

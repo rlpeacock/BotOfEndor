@@ -4,6 +4,7 @@ package Bot;
 use base qw(Bot::BasicBot);
 use strict;
 use warnings;
+use DateTime;
 
 # Mapping of book number to name.  Each number corresponds to a file in the bible's directory.
 # This map was lifted from versebot's source, which is why it's actually reversed from what I actually need.
@@ -27,7 +28,7 @@ my %TITLES = reverse(
     17=>'esther', 17=>'est',
     18=>'job', 
     19=>'psalms', 
-    20=>'proverbs', 
+    20=>'proverbs', 20=>'prov', 20=>'pro',
     21=>'ecclesiastes', 21=>'eccl', 21=>'ecc',
     22=>'song of songs', 22=>'song', 22=>'sos', 22=>'song of soloman',
     23=>'isaiah', 23=>'isa',
@@ -184,43 +185,49 @@ sub help {
 sub said {
     my $self = shift;
     my $message = shift;
+    my $who = $message->{who};
     my $body = $message->{body};
     if ($body =~ /^\?(.+)$/) {
         my $term = uc($1);
         chomp($term);
         my $def = find_definition($term) if $term;
+        my $max = 512*2;
+        if ($def && length($def) > $max) {
+            $def = substr($def, 0, $max-4);
+            $def .= "...";
+        }
         $self->say(channel => $message->{channel}, body => $def) if $def;
-        $self->log("doing line term");
+        $self->log("lineterm $term: " . ($def ? "found" : "not found"));
     }
-    elsif ($body =~ /\?(\w+)/) {
-        my $def = find_definition(uc($1));
-        $self->log("starting term");
+    elsif ($body =~ /^\?(\w+)/) {
+        my $term = uc($1);
+        my $def = find_definition(uc($term));
         $self->say(channel => $message->{channel}, body => $def) if $def;
-        $self->log("doing term");
+        $self->log("term $term: " . ($def ? "found" : "not found"));
     }
-    if ($body =~ /\[(.+)\]/) {
-        my @refs = lookup_bible_reference($1);
+    while ($body =~ /\[([^\]]+)\]/g) {
+        my $citation = $1;
+        my @refs = lookup_bible_reference($citation);
         for my $ref (@refs) {
-            $self->log("starting refs");
             $self->say(channel => $message->{channel}, body => $ref) if $ref;
-            $self->log("doing refs");
+            $self->log("ref $citation");
         }
     }
     if ($message->{address} && $body =~ /^raise\s(\w+)/) {
         my $raised = $1;
         if ($HIST{$raised}) {
-            $self->log("starting raised");
             $self->say(channel => $message->{channel}, body => "the spirit of $raised says: $_") for (@{$HIST{$raised}});
-            $self->log("doing raised");
+            $self->log("raised $raised: found");
         } else {
             my $msg = "Surely you know what Saul has done, how he has cut off the mediums and the wizards from the land. Why then are you laying a snare for my life to bring about my death?";
             $self->say(channel => $message->{channel}, body => $msg);
-            $self->log("doing not raised");
+            $self->log("raised $raised: not found");
         }
     }
-    my $who = $message->{who};
     $HIST{$who} = [] if !$HIST{$who};
-    push @{$HIST{$who}}, $body;
+    my $td = DateTime->now;
+    my $tstamp = sprintf("%s %02d:%02d UTC ", $td->day_abbr, $td->hour, $td->minute);
+    push @{$HIST{$who}}, "$tstamp $body";
     shift @{$HIST{$who}} if @{$HIST{$who}} > 3;
     undef;
 }
@@ -232,6 +239,11 @@ sub connected {
     $self->log("Connected");
 }
 
+sub init {
+    my $self = shift;
+    open my $log, '>', 'log' or die "Failed to open output log";
+    $self->{logfile} = $log;
+}
 sub startbot {
     Bot->new(
       server => "irc.freenode.org",
@@ -240,6 +252,16 @@ sub startbot {
 #      channels => [ '#test' ],
 #      nick => 'WitchOfEndor',
     )->run();
+}
+
+sub log {
+    my $self = shift;
+    my $td = DateTime->now;
+    for my $line (shift) {
+        my $logline = $td->ymd . " " . $td->hms . " " . $line . "\n";
+        print STDERR $logline;
+    }
+    undef;
 }
 
 my $mode = shift || "";

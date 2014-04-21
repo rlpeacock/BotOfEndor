@@ -1,134 +1,59 @@
 #!/usr/bin/perl
 
-package Bot;
+package BotOfEndor;
 use base qw(Bot::BasicBot);
 use strict;
 use warnings;
 use DateTime;
+use feature "switch";
 
-# Mapping of book number to name.  Each number corresponds to a file in the bible's directory.
-# This map was lifted from versebot's source, which is why it's actually reversed from what I actually need.
-# I'm too lazy to actually reverse it manually.
-my %TITLES = reverse(
-    1=>'genesis', 1=>'gen', 
-    2=>'exodus', 2=>'ex',
-    3=>'leviticus', 3=>'lev',
-    4=>'numbers', 4=>'num',
-    5=>'deuteronomy', 5=>'deut',
-    6=>'joshua', 6=>'josh',
-    7=>'judges', 7=>'jud',
-    8=>'ruth',
-    9=>'1 samuel', 9=>'1 sam',
-    10=>'2 samuel', 10=>'2 sam',
-    11=>'1 kings', 12=>'2 kings',
-    13=>'1 chronicles', 13=>'1 chron', 13=>'1 chr',
-    14=>'2 chronicles', 14=>'2 chron', 14=>'2 chr',
-    15=> 'ezra',
-    16=>'nehemiah', 16=>'neh', 16=>'nehem',
-    17=>'esther', 17=>'est',
-    18=>'job', 
-    19=>'psalms', 
-    20=>'proverbs', 20=>'prov', 20=>'pro',
-    21=>'ecclesiastes', 21=>'eccl', 21=>'ecc',
-    22=>'song of songs', 22=>'song', 22=>'sos', 22=>'song of soloman',
-    23=>'isaiah', 23=>'isa',
-    24=>'jeremiah', 24=>'jer',
-    25=>'lamentations', 25=>'lamen', 25=>'lam',
-    26=>'ezekiel', 26=>'eze',
-    27=>'daniel', 27=>'dan',
-    28=>'hosea', 28=>'hos',
-    29=>'joel', 
-    30=>'amos',
-    31=>'obadiah', 31=>'oba', 31=>'obd',
-    32=>'jonah', 32=>'jon', 
-    33=>'micah', 33=>'mic',
-    34=>'nahum', 34=>'nah',
-    35=>'habakkuk', 35=>'hab',
-    36=>'zephaniah', 36=>'zep', 36=>'zeph',
-    37=>'haggai', 37=>'hag', 37=>'hagg',
-    38=>'zechariah', 38=>'zec', 38=>'zech',
-    39=>'malachi', 39=>'mal', 39=>'mala', 
-    40=>'matthew', 40=>'matt', 40=>'mat',
-    41=>'mark', 41=>'mar',
-    42=>'luke', 42=>'luk',
-    43=>'john', 
-    44=>'acts', 
-    45=>'romans', 45=>'rom',
-    46=>'1 corinthians', 46=>'1 cor', 46=>'1 corin', 46=>'1 corinth',
-    47=>'2 corinthians', 47=>'2 cor', 47=>'2 corin', 47=>'2 corinth',
-    48=>'galatians', 48=>'galat', 48=>'gala', 48=>'gal',
-    49=>'ephesians', 49=>'ephes', 49=>'eph',
-    50=>'philippians', 50=>'philip', 50=>'phili', 50=>'phil', 50=>'phi',
-    51=>'colossians', 51=>'colos', 51=>'col',
-    52=>'1 thessalonians', 52=>'1 thessal', 52=>'1 thessa', 52=>'1 thess', 52=>'1 thes', 52=>'1 the',
-    53=>'2 thessalonians', 53=>'2 thessal', 53=>'2 thessa', 53=>'2 thess', 53=>'2 thes', 53=>'2 the',
-    54=>'1 timothy', 54=>'1 tim',
-    55=>'2 timothy', 55=>'2 tim',
-    56=>'titus', 56=>'tit',
-    57=>'philemon', 57=>'phile', 57=>'phl',
-    58=>'hebrews', 58=>'heb',
-    59=>'james', 59=>'jam',
-    60=>'1 peter', 60=>'1 pet',
-    61=>'2 peter', 61=>'2 pet',
-    62=>'1 john', 
-    63=>'2 john', 
-    64=>'3 john', 
-    65=>'jude', 65=>'jud',
-    66=>'revelation', 66=>'rev',
-    67=>'judith', 67=>'judi',
-    68=>'wisdom of solomon', 68=>'wos',
-    69=>'tobit', 69=>'tob',
-    70=>'ecclesiasticus', 
-    71=>'baruch', 71=>'bar',
-    72=>'1 maccabees', 72=>'1 macc', 72=>'1 mac',
-    73=>'2 maccabees', 73=>'2 macc', 73=>'2 mac',
-    74=>'prayer of azariah', 74=>'azariah', 74=>'aza',
-    75=>'additions to esther', 
-    76=>'prayer of manasseh', 
-    77=>'3 maccabees', 
-    78=>'4 maccabees', 
-    80=>'1 esdras', 
-    81=>'2 esdras', 
-    87=>'susanna', 
-    88=>'bel and the dragon'
-    );
+=head1 NAME
 
-my %TERMS;
-my %HIST;
+BotOfEndor - A bot for looking up bible references and other misc. functions
 
-# load defintions from data file and put it in global TERMS map
-sub load_definitions {
-    open my $termfile, "<", "data/terms" or die "Unable to load term file";
-    for my $line (<$termfile>) {
-        my ($term, $def) = split /\|/, $line;
-        chomp($def);
-        $TERMS{$term} = $def;
+
+=cut
+
+
+# set to 1 to enable debug logging for bible reference lookup
+my $DEBUG_REF = 0;
+
+
+#
+# get a map of book name to book id number (which corresponds to the actual file name)
+# loads it from a file in format <num>:<comma seperated list of names>
+#
+sub load_bookmap  {
+    my %bookmap;
+    open my $mapfile, "<", "data/bookmap" or die "Could not load book map";
+    for my $line (<$mapfile>) {
+        my ($num, $names) = split /:/, $line;
+        for my $name (split /,/, $names) {
+            $bookmap{$name} = $num;
+        }
     }
-    close $termfile;
-}
-load_definitions();
-
-sub find_definition {
-    my $term = shift;
-    $TERMS{$term};
+    close $mapfile;
+    %bookmap;
 }
 
-sub test_defs {
-    while (<>) {
-        my $term = $_;
-        chomp($term);
-        $term = uc($term);
-        $term =~ s/^\?//;
 
-        print find_definition($term);
-        print "\n";
-    }
-}
+# static map of name/alias to book number/file name
+my %BOOKMAP = load_bookmap();
 
+
+#
+# method which takes a bible citation and returns an array of the lines sited
+# param:
+#   $self: the object
+#   $ref: a citation in the form of [<book> <chapt>:<verse or verse range>]
+#
 sub lookup_bible_reference {
+    my $self = shift;
     my $ref = lc(shift);
     my ($book, $chapter, $verse, $end) = $ref =~ /(\d*\s*\w+)\s+(\d+):(\d+)-?(\d*)/;
-    my $booknum = $TITLES{$book} if $book;
+    my $booknum = $BOOKMAP{$book} if $book;
+    $self->log("$book => $booknum") if $DEBUG_REF;
+    # validate citation looks plausible
     return if !$booknum ||
               !$chapter ||
               !$verse ||
@@ -141,13 +66,18 @@ sub lookup_bible_reference {
 
     $end = $verse if not $end;
 
+    # build a list of <chapt>:<verse> strings for all in range (or just the single one if not a range)
     my @targets;
     for ($verse .. $end) {
+        $self->log("$chapter:$_") if $DEBUG_REF;
         push @targets, "$chapter:$_";
     }
 
     my @found;
-    open my $bookfile, "<", "data/nrsv/$booknum" or print "failed to open book $book ($booknum)\n";
+    open my $bookfile, "<", "data/nrsv/$booknum" or $self->log("failed to open book $book ($booknum)");
+    # go through book line by line looking for lines which begin with the <chapt:verse> strings we are looking for
+    # stop when we've found them all.  Yes, this is inefficient but it's easy and we really don't care at all
+    # about performance
     for my $line (<$bookfile>) {
         for my $target (@targets) {
             if ($target && $line =~ /^\s*$target/) {
@@ -161,99 +91,113 @@ sub lookup_bible_reference {
     return @found if @found;
 }
 
-sub test_lookup_bible_reference {
-    while (<STDIN>) {
-        my @refs = lookup_bible_reference($_);
-        for my $ref (@refs) {
-            print $ref;
-        }
+
+#
+# parse a message, pulling out all bible references, looking them up and returning them as an array of strings
+# param:
+#    $self: the object
+#    $message: the text
+# returns:
+#    list of verse strings
+#
+sub get_verses {
+    my ($self, $message) = @_; 
+    my @res;
+    while ($message =~ /\[([^\]]+)\]/g) {
+        my $citation = $1;
+        push @res, $self->lookup_bible_reference($citation);
     }
+    $self->log(join( ":", @res)) if $DEBUG_REF;
+    @res;
 }
 
-sub help {
-    my $self = shift;
-    my $message = shift;
-    my @help = (
-        "Got a question?  Why not consult the bot of Endor?",
-        "Prefix a word with a question mark, and if I know what it means I will give the definition",
-        "Reference a bible verse in this format: [<book> <chapter>:<verse>] and I will show that verse",
-        "e.g. [1 Peter 2:1] or use a range e.g. [Ruth 1:1-10].  Translation is NRSV.  Sorry I don't do deuterocanonical books yet.",
-        "I was created by JustDust in a fit of madness.  Now...whom shall I bring up for you?");
-    $self->say(channel => $message->{channel}, body => $_) for (@help);
+
+sub heretic {
+   my ($self, $message, $is_to_me) = @_;
+   my @res;
+#   if ($message =~ /(\S+):\sheretic!?$/i) {
+#       `echo $1 >> data/heretics`;
+#       @res = ("noted");
+#   }
+   if ($message =~ /(.+)\s+is\s+a\s+heretic!?$/i) {
+       `echo $1 >> data/heretics`;
+       @res = ("noted");
+   } elsif ($is_to_me && $message =~ /^heretics$/) {
+       my @lines = `cat data/heretics | sort | uniq -c | sort -nr | head -n 5`;
+       push @res, "Top heretics of #reddit-Christianity:";
+       my $i = 1;
+       push @res, map { heretic_label($i++, $2, $1) if /(\d+)\s+(\S+)/; } @lines;
+   }
+   @res;
 }
 
+
+sub heretic_label {
+    my ($index, $name, $count) = @_;
+    my $label = $count > 1 ? "denunciations" : "denunciation";
+    "   #$index $name ($count $label)";
+}
+
+
+#
+# handle a message
+# parameter:
+#    $self: the object
+#    $message: the text we received
+#    $is_to_me: 1 if it's directed to us, either by direct message or by naming in public chat
+#    $is_private: 1 if it was sent directly to us
+# returns:
+#    list of strings to send as response
+#
+sub process_message {
+    my ($self, $message, $is_to_me, $is_private) = @_;
+    $self->log("handling $message");
+    my @res;
+    for ($message) {
+        when (/\[([^\]]+)\]/)  { @res = $self->get_verses($message) }
+        when (/heretic/i) { @res = $self->heretic($message, $is_to_me) }
+# definition lookup went here...but it was too much work
+#        when (/^\?(.+)$/)      { @res = $self->get_def($message) }
+        when (/(Christ|he)\s+is\s+risen[\.!]?/) { @res = ('He is risen indeed!') }
+        default { }
+    }
+    @res;
+}
+
+#
+# callback invoked when someone says something in a channel we're attached to, or someone
+# sends us a message.
+# parameters:
+#    $self: the object
+#    $message: message structure
+#
+# address is either 'msg' if it's private or 'AllEars' if addressed like "AllEars: test"
+# chan will be '#reddit-Christianity' unless it's a direct message, in which case it's 'msg'
+# to message a person, set who=>$who ...leave it out to send to channel
+#
 sub said {
     my $self = shift;
     my $message = shift;
     my $who = $message->{who};
+    my $addr = $message->{address} || "-";
+    my $chan = $message->{channel};
     my $body = $message->{body};
-    if ($body =~ /^\?(.+)$/) {
-        my $term = uc($1);
-        chomp($term);
-        my $def = find_definition($term) if $term;
-        my $max = 512*2;
-        if ($def && length($def) > $max) {
-            $def = substr($def, 0, $max-4);
-            $def .= "...";
-        }
-        $self->say(channel => $message->{channel}, body => $def) if $def;
-        $self->log("lineterm $term: " . ($def ? "found" : "not found"));
-    }
-    elsif ($body =~ /^\?(\w+)/) {
-        my $term = uc($1);
-        my $def = find_definition(uc($term));
-        $self->say(channel => $message->{channel}, body => $def) if $def;
-        $self->log("term $term: " . ($def ? "found" : "not found"));
-    }
-    while ($body =~ /\[([^\]]+)\]/g) {
-        my $citation = $1;
-        my @refs = lookup_bible_reference($citation);
-        for my $ref (@refs) {
-            $self->say(channel => $message->{channel}, body => $ref) if $ref;
-            $self->log("ref $citation");
-        }
-    }
-    if ($message->{address} && $body =~ /^raise\s(\w+)/) {
-        my $raised = $1;
-        if ($HIST{$raised}) {
-            $self->say(channel => $message->{channel}, body => "the spirit of $raised says: $_") for (@{$HIST{$raised}});
-            $self->log("raised $raised: found");
+    my $is_to_me = $addr ne "-";
+    my $is_private = $chan eq "msg";
+    my @response = $self->process_message($body, $is_to_me, $is_private);
+    for my $line (@response) {
+        if ($addr eq "msg") {
+            $self->say(channel => 'msg', who => $who, body => $line);
         } else {
-            my $msg = "Surely you know what Saul has done, how he has cut off the mediums and the wizards from the land. Why then are you laying a snare for my life to bring about my death?";
-            $self->say(channel => $message->{channel}, body => $msg);
-            $self->log("raised $raised: not found");
+            $self->say(channel => $chan, body => $line);
         }
     }
-    $HIST{$who} = [] if !$HIST{$who};
-    my $td = DateTime->now;
-    my $tstamp = sprintf("%s %02d:%02d UTC ", $td->day_abbr, $td->hour, $td->minute);
-    push @{$HIST{$who}}, "$tstamp $body";
-    shift @{$HIST{$who}} if @{$HIST{$who}} > 3;
     undef;
 }
 
-sub connected {
-    my $self = shift;
-    $self->log("Identifying");
-    $self->say(channel => "msg", who => "nickserv", body => "identify BotOfEndor hermes");
-    $self->log("Connected");
-}
-
-sub init {
-    my $self = shift;
-    open my $log, '>', 'log' or die "Failed to open output log";
-    $self->{logfile} = $log;
-}
-sub startbot {
-    Bot->new(
-      server => "irc.freenode.org",
-      channels => [ '#reddit-Christianity' ],
-      nick => 'BotOfEndor',
-#      channels => [ '#test' ],
-#      nick => 'WitchOfEndor',
-    )->run();
-}
-
+#
+# put a timestamp in front of each parameter and print it to stderr
+#
 sub log {
     my $self = shift;
     my $td = DateTime->now;
@@ -264,13 +208,37 @@ sub log {
     undef;
 }
 
-my $mode = shift || "";
-if ($mode =~ /run/) {
-    startbot();
-} elsif ($mode =~ /ref/) {
-    test_lookup_bible_reference();
-} elsif ($mode =~ /def/) {
-    test_defs();
-} else {
-    print "orthobot.pl <run|ref|def>\n";
+#
+# callback for when we connect
+#
+sub connected {
+    my $self = shift;
+    if ($BotOfEndor::pwd !~ /none/) {
+        $self->log("Identifying");
+        $self->say(channel => "msg", who => "nickserv", body => "IDENTIFY $BotOfEndor::nick $BotOfEndor::pwd");
+    }
+    $self->log("Connected");
 }
+
+# 
+# callback for startup
+#
+sub init {
+    my $self = shift;
+}
+
+#
+# main routine
+#
+sub startbot {
+    my ($nick, $channel) = @_;
+    BotOfEndor->new(
+      server => "irc.freenode.org",
+      channels => [ '#'.$channel ],
+      nick => $nick,
+    )->run();
+}
+
+our ($nick, $pwd, $channel) = @ARGV;
+die "Usage: botofendor.pl <nick> <pwd> <channel>\n" if !($nick && $pwd && $channel);
+startbot($nick, $channel);

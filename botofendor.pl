@@ -112,33 +112,6 @@ sub get_verses {
 }
 
 
-sub heretic {
-   my ($self, $message, $is_to_me) = @_;
-   my @res;
-#   if ($message =~ /(\S+):\sheretic!?$/i) {
-#       `echo $1 >> data/heretics`;
-#       @res = ("noted");
-#   }
-   if ($message =~ /(.+)\s+is\s+a\s+heretic!?$/i) {
-       `echo $1 >> data/heretics`;
-       @res = ("noted");
-   } elsif ($is_to_me && $message =~ /^heretics$/) {
-       my @lines = `cat data/heretics | sort | uniq -c | sort -nr | head -n 5`;
-       push @res, "Top heretics of #reddit-Christianity:";
-       my $i = 1;
-       push @res, map { heretic_label($i++, $2, $1) if /(\d+)\s+(\S+)/; } @lines;
-   }
-   @res;
-}
-
-
-sub heretic_label {
-    my ($index, $name, $count) = @_;
-    my $label = $count > 1 ? "denunciations" : "denunciation";
-    "   #$index $name ($count $label)";
-}
-
-
 #
 # handle a message
 # parameter:
@@ -155,10 +128,6 @@ sub process_message {
     my @res;
     for ($message) {
         when (/\[([^\]]+)\]/)  { @res = $self->get_verses($message) }
-        when (/heretic/i) { @res = $self->heretic($message, $is_to_me) }
-# definition lookup went here...but it was too much work
-#        when (/^\?(.+)$/)      { @res = $self->get_def($message) }
-        when (/(Christ|he)\s+is\s+risen[\.!]?/) { @res = ('He is risen indeed!') }
         default { }
     }
     @res;
